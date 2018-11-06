@@ -1,0 +1,30 @@
+[
+    {
+        "ParameterKey": "AvailabilityZone",
+        "ParameterValue": "#AVAILABILITY_ZONE#"
+    },
+    {
+        "ParameterKey": "ConfigBucket",
+        "ParameterValue": "#CONFIG_BUCKET#"
+    },
+    {
+        "ParameterKey": "Ami",
+        "ParameterValue": "#AMI#"
+    },
+    {
+        "ParameterKey": "Vpc",
+        "ParameterValue": "#VPC#"
+    },
+    {
+        "ParameterKey": "InstanceType",
+        "ParameterValue": "#INSTANCE_TYPE#"
+    },
+    {
+        "ParameterKey": "ConfigBucketName",
+        "ParameterValue": "#CONFIG_BUCKET_NAME#"
+    },
+    {
+        "ParameterKey": "FilesBucketName",
+        "ParameterValue": "#FILES_BUCKET_NAME#"
+    }
+]

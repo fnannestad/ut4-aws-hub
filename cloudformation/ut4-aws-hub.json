@@ -1,3 +1,320 @@
 {
-  "todo": "Cloudformation script to set up UT4 server AWS environment"
+  "Description": "UT4 Hub CloudFormation stack",
+  "Parameters": {
+    "AvailabilityZone": {
+      "Description": "Availability Zone in which the UT4 Hub will be launched.",
+      "Type": "String"
+    },
+    "ConfigBucket": {
+      "Description": "Bucket containing scripts and config for the UT4 Hub.",
+      "Type": "String"
+    },
+    "Ami": {
+      "Description": "UT4 Hub AMI.",
+      "Type": "String"
+    },
+    "Vpc": {
+      "Description": "VPC to create the UT4 Hub in.",
+      "Type": "String"
+    },
+    "InstanceType": {
+      "Description": "Instance type of the UT4 Hub, e.g., t2.micro.",
+      "Type": "String"
+    },
+    "ConfigBucketName": {
+      "Description": "Name of S3 bucket that stores server config.",
+      "Type": "String"
+    },
+    "FilesBucketName": {
+      "Description": "Instance type of the UT4 Hub, e.g., t2.micro",
+      "Type": "String"
+    }
+  },
+  "Resources": {
+    "PrivateBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Id": "PrivateBucketPolicy",
+          "Statement": [
+            {
+              "Sid": "ReadAccess",
+              "Action": [
+                "s3:GetObject"
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:s3:::",
+                    {
+                      "Ref": "ConfigBucket"
+                    },
+                    "/*"
+                  ]
+                ]
+              },
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "CfnUser",
+                    "Arn"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "Bucket": {
+          "Ref": "PrivateBucket"
+        }
+      }
+    },
+    "ConfigBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "AccessControl": "Private",
+        "BucketName": {
+          "Ref": "ConfigBucketName"
+        }
+      }
+    },
+    "FilesBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "AccessControl": "Public",
+        "BucketName": {
+          "Ref": "FilesBucketName"
+        }
+      }
+    },
+    "UT4AWSHubAutoScalingGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "AvailabilityZones": [
+          {
+            "Ref": "AvailabilityZone"
+          }
+        ],
+        "LaunchConfigurationName": {
+          "Ref": "UT4AWSHubLaunchConfig"
+        },
+        "MinSize": "1",
+        "MaxSize": "1",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "UT4AWSHubAutoScalingGroup",
+            "PropagateAtLaunch": "false"
+          }
+        ]
+      }
+    },
+    "UT4AWSHubWaitHandle": {
+      "Type": "AWS::CloudFormation::WaitConditionHandle"
+    },
+    "UT4AWSHubInstanceSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "UT4 Hub security group",
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      }
+    },
+    "UT4AWSHubInstanceSecurityGroupIngress22": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "Description": "SSH access to server from personal device",
+        "GroupId": {
+          "Ref": "UT4AWSHubInstanceSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "22",
+        "ToPort": "2",
+        "CidrIp": "220.240.156.161/32"
+      }
+    },
+    "UT4AWSHubInstanceSecurityGroupIngress8000to8999": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "Description": "Instance game ports",
+        "GroupId": {
+          "Ref": "UT4AWSHubInstanceSecurityGroup"
+        },
+        "IpProtocol": "udp",
+        "FromPort": "8000",
+        "ToPort": "8999",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "UT4AWSHubInstanceSecurityGroupIngress7777": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "Description": "Client communication",
+        "GroupId": {
+          "Ref": "UT4AWSHubInstanceSecurityGroup"
+        },
+        "IpProtocol": "udp",
+        "FromPort": "7777",
+        "ToPort": "7777",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "UT4AWSHubInstanceSecurityGroupIngress7787": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "Description": "Server queries",
+        "GroupId": {
+          "Ref": "UT4AWSHubInstanceSecurityGroup"
+        },
+        "IpProtocol": "udp",
+        "FromPort": "7787",
+        "ToPort": "7787",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "UT4AWSHubInstanceSecurityGroupIngress14000": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "Description": "Instance communication for hub",
+        "GroupId": {
+          "Ref": "UT4AWSHubInstanceSecurityGroup"
+        },
+        "IpProtocol": "udp",
+        "FromPort": "14000",
+        "ToPort": "14000",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "UT4AWSHubLaunchConfiguration": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "DependsOn": "PrivateBucketPolicy",
+      "Metadata": {
+        "AWS::CloudFormation::Init": {
+          "config": {
+            "files": {
+              "/tmp/Engine.ini": {
+                "source": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "https://s3-",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      ".amazonaws.com/",
+                      {
+                        "Ref": "ConfigBucket"
+                      },
+                      "/myfile.sh"
+                    ]
+                  ]
+                },
+                "mode": "000600",
+                "owner": "root",
+                "group": "root",
+                "authentication": "S3AccessCreds"
+              }
+            }
+          }
+        }
+      },
+      "AWS::CloudFormation::Authentication": {
+        "S3AccessCreds": {
+          "type": "S3",
+          "accessKeyId": {
+            "Ref": "HostKeys"
+          },
+          "secretKey": {
+            "Fn::GetAtt": [
+              "HostKeys",
+              "SecretAccessKey"
+            ]
+          },
+          "buckets": [
+            {
+              "Ref": "ConfigBucket"
+            }
+          ]
+        },
+        "S3AccessAdminCreds": {
+          "type": "S3",
+          "accessKeyId": {
+            "Ref": "HostKeys"
+          },
+          "secretKey": {
+            "Fn::GetAtt": [
+              "HostKeys",
+              "SecretAccessKey"
+            ]
+          },
+          "buckets": [
+            {
+              "Ref": "AdminBucket"
+            }
+          ]
+        }
+      }
+    },
+    "Properties": {
+      "ImageId": {
+        "Ref": "Ami"
+      },
+      "InstanceType": {
+        "Ref": "InstanceType"
+      },
+      "BlockDeviceMappings": [
+        {
+          "DeviceName": "/dev/sda1",
+          "Ebs": {
+            "VolumeSize": "8"
+          }
+        }
+      ],
+      "SecurityGroups": [
+        {
+          "Ref": "UT4AWSHubInstanceSecurityGroup"
+        }
+      ],
+      "KeyName": {
+        "Ref": "KeyName"
+      },
+      "IamInstanceProfile": {
+        "Ref": "DefaultInstanceProfile"
+      },
+      "UserData": {
+        "Fn::Base64": {
+          "Fn::Join": [
+            "",
+            [
+              "#!/usr/bin/env bash\n",
+              "# Error reporting helper function\n",
+              "function error_exit\n",
+              "{\n",
+              "    cfn-signal -e 1 -r \"$1\" '",
+              {
+                "Ref": "UT4AWSHubWaitHandle"
+              },
+              "'\n",
+              "    exit 1\n",
+              "}\n",
+              "cfn-init -s ",
+              {
+                "Ref": "AWS::StackName"
+              },
+              " -r UT4AWSHubLaunchConfig --region ",
+              {
+                "Ref": "AWS::Region"
+              },
+              " || error_exit 'Failed to run cfn-init'\n",
+              "sh ./bootstrap-server.sh '",
+              " || error_exit 'Failed to run bootstrap.sh'\n"
+            ]
+          ]
+        }
+      }
+    }
+  }
 }
